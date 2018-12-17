@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.tungtu.socket.ConstantsService.*;
@@ -30,6 +32,7 @@ public class SocketServer extends WebSocketServer {
 
     private ConcurrentHashMap<String, WebSocket> connectionsById;
     private ConcurrentHashMap<WebSocket, String> connectionsByConnection;
+    private ConcurrentHashMap<String, ConcurrentHashMap<String, String>> propertiesById;
 
     private ConnectionFactory connectionFactory;
     private Connection connection;
@@ -60,6 +63,9 @@ public class SocketServer extends WebSocketServer {
             try {
                 JSONObject jsonObject = new JSONObject(message);
                 jsonObject.put(SOCKET_ID, id);
+                ConcurrentHashMap<String, String> socketIdProperties = propertiesById.getOrDefault(SOCKET_ID, new ConcurrentHashMap<>());
+                jsonObject.put(SOCKET_ID_PROPERTIES, new JSONObject(socketIdProperties));
+                logger.info("onMessage object: " + jsonObject.toString());
                 messageFromSocketSchema.validate(jsonObject);
                 channel.basicPublish(DEFAULT_EXCHANGE, MESSAGES_FROM_SOCKET_QUEUE, null, jsonObject.toString().getBytes(StandardCharsets.UTF_8));
             } catch (org.json.JSONException e) {
@@ -97,6 +103,7 @@ public class SocketServer extends WebSocketServer {
     private void setupConnectionMaps() {
         connectionsById = new ConcurrentHashMap<>();
         connectionsByConnection = new ConcurrentHashMap<>();
+        propertiesById = new ConcurrentHashMap<>();
     }
 
     private void createEntry(WebSocket conn) {
@@ -104,6 +111,7 @@ public class SocketServer extends WebSocketServer {
 
         connectionsById.put(id, conn);
         connectionsByConnection.put(conn, id);
+        propertiesById.put(id, new ConcurrentHashMap<>());
     }
 
     private void removeEntry(WebSocket conn) {
@@ -135,6 +143,16 @@ public class SocketServer extends WebSocketServer {
 
                 String id = jsonObject.getString(SOCKET_ID);
                 String payload = jsonObject.getString(PAYLOAD);
+                JSONObject socketIdProperties = jsonObject.getJSONObject(SOCKET_ID_PROPERTIES);
+
+                Map<String, String> mappedProperties = new HashMap<>();
+                socketIdProperties.toMap().forEach((key, value) -> {
+                    mappedProperties.put(key, value.toString());
+                });
+
+                ConcurrentHashMap<String, String> properties = propertiesById.getOrDefault(id, new ConcurrentHashMap<>());
+                properties.putAll(mappedProperties);
+                propertiesById.put(id, properties);
 
                 WebSocket conn = connectionsById.get(id);
                 conn.send(payload);

@@ -89,12 +89,11 @@ public class RouterWorker {
         channel.basicConsume(MESSAGES_FROM_SOCKET_QUEUE, true, (consumerTag, delivery) -> {
             try {
                 String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+                logger.info("message: " + message);
                 JSONObject jsonObject = new JSONObject(message);
 
                 String socketId = jsonObject.getString(SOCKET_ID);
                 String messageType = jsonObject.getString(MESSAGE_TYPE);
-
-                jsonObject.remove(SOCKET_ID);
 
                 if (!routeMap.containsKey(messageType)) {
                     JSONObject payload = new JSONObject();
